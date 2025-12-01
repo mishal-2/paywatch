@@ -1,14 +1,14 @@
 import React, { useState } from "react";
-import axios from "axios";
 import {
   Box,
   TextField,
   Button,
   CircularProgress,
   Alert,
-
 } from "@mui/material";
 import SendIcon from "@mui/icons-material/Send";
+import { transactionAPI } from "../services/api";
+import OTPModal from "./OTPModal";
 
 function TransactionForm({ setPrediction }) {
   const [amount, setAmount] = useState("");
@@ -16,6 +16,10 @@ function TransactionForm({ setPrediction }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  
+  // OTP Modal state
+  const [otpModalOpen, setOtpModalOpen] = useState(false);
+  const [currentTransaction, setCurrentTransaction] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -40,14 +44,28 @@ function TransactionForm({ setPrediction }) {
 
     setLoading(true);
     try {
-      const res = await axios.post("http://127.0.0.1:5000/predict", {
-        Amount: parseFloat(amount),
-        Time: parseFloat(time),
+      const res = await transactionAPI.predict(parseFloat(amount), parseFloat(time));
+      const { prediction, fraud_score, transaction_id, requires_2fa, message } = res.data;
+      
+      setPrediction({
+        prediction,
+        fraud_score,
+        transaction_id,
       });
-      setPrediction(res.data.prediction);
-      setSuccess("Fraud prediction completed!");
-      setAmount("");
-      setTime("");
+
+      if (requires_2fa) {
+        // Open OTP modal for verification
+        setCurrentTransaction({
+          id: transaction_id,
+          amount: parseFloat(amount),
+        });
+        setOtpModalOpen(true);
+        setSuccess(message);
+      } else {
+        setSuccess("Transaction approved successfully!");
+        setAmount("");
+        setTime("");
+      }
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.error || "Error predicting fraud. Please try again.");
@@ -56,192 +74,219 @@ function TransactionForm({ setPrediction }) {
     }
   };
 
+  const handleOTPVerified = () => {
+    setSuccess("Transaction verified and approved successfully!");
+    setAmount("");
+    setTime("");
+    setOtpModalOpen(false);
+    
+    // Update prediction to show verified status
+    setPrediction((prev) => ({
+      ...prev,
+      verified: true,
+    }));
+  };
+
   return (
-    <Box component="form" onSubmit={handleSubmit} sx={{ width: "100%" }}>
-      {/* Error Alert */}
-      {error && (
-        <Alert
-          severity="error"
-          sx={{
-            mb: 2,
-            borderRadius: "10px",
-            background: "rgba(255, 107, 107, 0.1)",
-            border: "1px solid rgba(255, 107, 107, 0.3)",
-            color: "#ff6b6b",
-            "& .MuiAlert-icon": {
+    <>
+      <Box component="form" onSubmit={handleSubmit} sx={{ width: "100%" }}>
+        {/* Error Alert */}
+        {error && (
+          <Alert
+            severity="error"
+            sx={{
+              mb: 2,
+              borderRadius: "10px",
+              background: "rgba(255, 107, 107, 0.1)",
+              border: "1px solid rgba(255, 107, 107, 0.3)",
               color: "#ff6b6b",
-            },
-          }}
-        >
-          {error}
-        </Alert>
-      )}
-
-      {/* Success Alert */}
-      {success && (
-        <Alert
-          severity="success"
-          sx={{
-            mb: 2,
-            borderRadius: "10px",
-            background: "rgba(81, 207, 102, 0.1)",
-            border: "1px solid rgba(81, 207, 102, 0.3)",
-            color: "#51cf66",
-            "& .MuiAlert-icon": {
-              color: "#51cf66",
-            },
-          }}
-        >
-          {success}
-        </Alert>
-      )}
-
-      {/* Amount Input */}
-      <TextField
-        label="Transaction Amount"
-        type="number"
-        fullWidth
-        value={amount}
-        onChange={(e) => setAmount(e.target.value)}
-        placeholder="Enter amount in USD"
-        sx={{
-          mb: 2.5,
-          "& .MuiOutlinedInput-root": {
-            backgroundColor: "rgba(102, 126, 234, 0.08)",
-            borderRadius: "10px",
-            transition: "all 0.3s",
-            "& fieldset": {
-              borderColor: "rgba(102, 126, 234, 0.3)",
-            },
-            "&:hover fieldset": {
-              borderColor: "rgba(102, 126, 234, 0.6)",
-            },
-            "&.Mui-focused fieldset": {
-              borderColor: "#667eea",
-            },
-          },
-          "& .MuiInputBase-input": {
-            color: "#333",
-            fontSize: "15px",
-          },
-          "& .MuiInputLabel-root": {
-            color: "#999",
-          },
-        }}
-        InputProps={{
-          startAdornment: "$",
-        }}
-        disabled={loading}
-      />
-
-      {/* Time Input */}
-      <TextField
-        label="Transaction Time"
-        type="number"
-        fullWidth
-        value={time}
-        onChange={(e) => setTime(e.target.value)}
-        placeholder="Enter time in seconds (0-86400)"
-        sx={{
-          mb: 3,
-          "& .MuiOutlinedInput-root": {
-            backgroundColor: "rgba(102, 126, 234, 0.08)",
-            borderRadius: "10px",
-            transition: "all 0.3s",
-            "& fieldset": {
-              borderColor: "rgba(102, 126, 234, 0.3)",
-            },
-            "&:hover fieldset": {
-              borderColor: "rgba(102, 126, 234, 0.6)",
-            },
-            "&.Mui-focused fieldset": {
-              borderColor: "#667eea",
-            },
-          },
-          "& .MuiInputBase-input": {
-            color: "#333",
-            fontSize: "15px",
-          },
-          "& .MuiInputLabel-root": {
-            color: "#999",
-          },
-        }}
-        InputProps={{
-          endAdornment: "sec",
-        }}
-        disabled={loading}
-      />
-
-      {/* Submit Button */}
-      <Button
-        type="submit"
-        fullWidth
-        variant="contained"
-        disabled={loading}
-        sx={{
-          background: loading
-            ? "linear-gradient(135deg, #999 0%, #777 100%)"
-            : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-          color: "white",
-          fontWeight: "700",
-          py: 1.5,
-          borderRadius: "10px",
-          fontSize: "16px",
-          textTransform: "none",
-          transition: "all 0.3s",
-          boxShadow: "0 8px 20px rgba(102, 126, 234, 0.4)",
-          "&:hover": {
-            boxShadow: "0 12px 30px rgba(102, 126, 234, 0.6)",
-            transform: "translateY(-2px)",
-          },
-          "&:active": {
-            transform: "translateY(0)",
-          },
-          "&:disabled": {
-            boxShadow: "0 8px 20px rgba(0, 0, 0, 0.1)",
-          },
-          display: "flex",
-          gap: 1,
-          justifyContent: "center",
-          alignItems: "center",
-        }}
-      >
-        {loading ? (
-          <>
-            <CircularProgress size={20} color="inherit" />
-            Analyzing...
-          </>
-        ) : (
-          <>
-            <SendIcon sx={{ fontSize: "18px" }} />
-            Check Fraud
-          </>
+              "& .MuiAlert-icon": {
+                color: "#ff6b6b",
+              },
+            }}
+          >
+            {error}
+          </Alert>
         )}
-      </Button>
 
-      {/* Info Text */}
-      <Box
-        sx={{
-          mt: 2.5,
-          p: 2,
-          background: "rgba(102, 126, 234, 0.08)",
-          borderRadius: "10px",
-          border: "1px solid rgba(102, 126, 234, 0.2)",
-        }}
-      >
-        <ul
-          style={{
-            margin: 0,
-            paddingLeft: "20px",
-            fontSize: "12px",
-            color: "#666",
+        {/* Success Alert */}
+        {success && (
+          <Alert
+            severity="success"
+            sx={{
+              mb: 2,
+              borderRadius: "10px",
+              background: "rgba(81, 207, 102, 0.1)",
+              border: "1px solid rgba(81, 207, 102, 0.3)",
+              color: "#51cf66",
+              "& .MuiAlert-icon": {
+                color: "#51cf66",
+              },
+            }}
+          >
+            {success}
+          </Alert>
+        )}
+
+        {/* Amount Input */}
+        <TextField
+          label="Transaction Amount"
+          type="number"
+          fullWidth
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder="Enter amount in USD"
+          sx={{
+            mb: 2.5,
+            "& .MuiOutlinedInput-root": {
+              backgroundColor: "rgba(102, 126, 234, 0.08)",
+              borderRadius: "10px",
+              transition: "all 0.3s",
+              "& fieldset": {
+                borderColor: "rgba(102, 126, 234, 0.3)",
+              },
+              "&:hover fieldset": {
+                borderColor: "rgba(102, 126, 234, 0.6)",
+              },
+              "&.Mui-focused fieldset": {
+                borderColor: "#667eea",
+              },
+            },
+            "& .MuiInputBase-input": {
+              color: "#333",
+              fontSize: "15px",
+            },
+            "& .MuiInputLabel-root": {
+              color: "#999",
+            },
+          }}
+          InputProps={{
+            startAdornment: "$",
+          }}
+          disabled={loading}
+        />
+
+        {/* Time Input */}
+        <TextField
+          label="Transaction Time"
+          type="number"
+          fullWidth
+          value={time}
+          onChange={(e) => setTime(e.target.value)}
+          placeholder="Enter time in seconds (0-86400)"
+          sx={{
+            mb: 3,
+            "& .MuiOutlinedInput-root": {
+              backgroundColor: "rgba(102, 126, 234, 0.08)",
+              borderRadius: "10px",
+              transition: "all 0.3s",
+              "& fieldset": {
+                borderColor: "rgba(102, 126, 234, 0.3)",
+              },
+              "&:hover fieldset": {
+                borderColor: "rgba(102, 126, 234, 0.6)",
+              },
+              "&.Mui-focused fieldset": {
+                borderColor: "#667eea",
+              },
+            },
+            "& .MuiInputBase-input": {
+              color: "#333",
+              fontSize: "15px",
+            },
+            "& .MuiInputLabel-root": {
+              color: "#999",
+            },
+          }}
+          InputProps={{
+            endAdornment: "sec",
+          }}
+          disabled={loading}
+        />
+
+        {/* Submit Button */}
+        <Button
+          type="submit"
+          fullWidth
+          variant="contained"
+          disabled={loading}
+          sx={{
+            background: loading
+              ? "linear-gradient(135deg, #999 0%, #777 100%)"
+              : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            color: "white",
+            fontWeight: "700",
+            py: 1.5,
+            borderRadius: "10px",
+            fontSize: "16px",
+            textTransform: "none",
+            transition: "all 0.3s",
+            boxShadow: "0 8px 20px rgba(102, 126, 234, 0.4)",
+            "&:hover": {
+              boxShadow: "0 12px 30px rgba(102, 126, 234, 0.6)",
+              transform: "translateY(-2px)",
+            },
+            "&:active": {
+              transform: "translateY(0)",
+            },
+            "&:disabled": {
+              boxShadow: "0 8px 20px rgba(0, 0, 0, 0.1)",
+            },
+            display: "flex",
+            gap: 1,
+            justifyContent: "center",
+            alignItems: "center",
           }}
         >
-          <li>Amount: Transaction value in USD</li>
-          <li>Time: Seconds since start of day (0-86400)</li>
-        </ul>
+          {loading ? (
+            <>
+              <CircularProgress size={20} color="inherit" />
+              Analyzing...
+            </>
+          ) : (
+            <>
+              <SendIcon sx={{ fontSize: "18px" }} />
+              Check Fraud
+            </>
+          )}
+        </Button>
+
+        {/* Info Text */}
+        <Box
+          sx={{
+            mt: 2.5,
+            p: 2,
+            background: "rgba(102, 126, 234, 0.08)",
+            borderRadius: "10px",
+            border: "1px solid rgba(102, 126, 234, 0.2)",
+          }}
+        >
+          <ul
+            style={{
+              margin: 0,
+              paddingLeft: "20px",
+              fontSize: "12px",
+              color: "#666",
+            }}
+          >
+            <li>Amount: Transaction value in USD</li>
+            <li>Time: Seconds since start of day (0-86400)</li>
+            <li>High-risk transactions require 2FA verification</li>
+          </ul>
+        </Box>
       </Box>
-    </Box>
+
+      {/* OTP Verification Modal */}
+      {currentTransaction && (
+        <OTPModal
+          open={otpModalOpen}
+          onClose={() => setOtpModalOpen(false)}
+          transactionId={currentTransaction.id}
+          amount={currentTransaction.amount}
+          onVerified={handleOTPVerified}
+        />
+      )}
+    </>
   );
 }
 
