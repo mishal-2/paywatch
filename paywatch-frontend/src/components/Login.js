@@ -1,33 +1,94 @@
 import React, { useState } from "react";
-import {  TextField, Button, Typography, Paper } from "@mui/material";
+import { TextField, Button, Typography, Paper, Alert, Tabs, Tab, Box } from "@mui/material";
+import { authAPI } from "../services/api";
 
 const Login = ({ onLogin }) => {
-  const [credentials, setCredentials] = useState({ username: "", password: "" });
+  const [tab, setTab] = useState(0); // 0 = Login, 1 = Register
+  const [credentials, setCredentials] = useState({ username: "", email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     setCredentials({ ...credentials, [e.target.name]: e.target.value });
+    setError("");
   };
 
-  const handleLogin = () => {
-    if (credentials.username && credentials.password) {
-      onLogin(credentials.username);
+  const handleLogin = async () => {
+    setError("");
+    setLoading(true);
+
+    if (!credentials.email || !credentials.password) {
+      setError("Email and password are required");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const response = await authAPI.login(credentials.email, credentials.password);
+      const { token, user } = response.data;
+
+      // Store token and user info
+      localStorage.setItem("token", token);
+      localStorage.setItem("user", JSON.stringify(user));
+
+      // Call parent callback
+      onLogin(user.username);
+    } catch (err) {
+      setError(err.response?.data?.error || "Login failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRegister = async () => {
+    setError("");
+    setLoading(true);
+
+    if (!credentials.username || !credentials.email || !credentials.password) {
+      setError("All fields are required");
+      setLoading(false);
+      return;
+    }
+
+    if (credentials.password.length < 6) {
+      setError("Password must be at least 6 characters");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const response = await authAPI.register(
+        credentials.username,
+        credentials.email,
+        credentials.password
+      );
+      const { token, user } = response.data;
+
+      // Store token and user info
+      localStorage.setItem("token", token);
+      localStorage.setItem("user", JSON.stringify(user));
+
+      // Call parent callback
+      onLogin(user.username);
+    } catch (err) {
+      setError(err.response?.data?.error || "Registration failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (tab === 0) {
+      handleLogin();
     } else {
-      alert("Enter username and password");
+      handleRegister();
     }
   };
 
   return (
     <div
-      sx={{
-        minHeight: "100vh",
-        background: "linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        position: "relative",
-        overflow: "hidden",
-      }}
       style={{
         minHeight: "100vh",
         background: "linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)",
@@ -65,8 +126,8 @@ const Login = ({ onLogin }) => {
         }}
       />
 
-      <Paper 
-        sx={{ 
+      <Paper
+        sx={{
           p: 4,
           width: "100%",
           maxWidth: "420px",
@@ -80,8 +141,8 @@ const Login = ({ onLogin }) => {
         }}
         elevation={0}
       >
-        <Typography 
-          variant="h4" 
+        <Typography
+          variant="h4"
           gutterBottom
           sx={{
             textAlign: "center",
@@ -95,129 +156,136 @@ const Login = ({ onLogin }) => {
         >
           PayWatch
         </Typography>
-        <Typography 
+        <Typography
           variant="body2"
           sx={{
             textAlign: "center",
             color: "#999",
-            mb: 4,
+            mb: 3,
             fontSize: "14px",
           }}
         >
-          Track your finances with precision
+          AI-Powered Fraud Detection
         </Typography>
 
-        <TextField
-          label="Username"
-          name="username"
-          fullWidth
-          value={credentials.username}
-          onChange={handleChange}
-          sx={{ 
-            mb: 2.5,
-            "& .MuiOutlinedInput-root": {
-              backgroundColor: "rgba(102, 126, 234, 0.08)",
-              borderRadius: "10px",
-              transition: "all 0.3s",
-              "& fieldset": {
-                borderColor: "rgba(102, 126, 234, 0.3)",
-              },
-              "&:hover fieldset": {
-                borderColor: "rgba(102, 126, 234, 0.6)",
-              },
-              "&.Mui-focused fieldset": {
-                borderColor: "#667eea",
-                boxShadow: "0 0 0 3px rgba(102, 126, 234, 0.1)",
-              },
-            },
-            "& .MuiInputBase-input": {
-              color: "#333",
-              fontSize: "15px",
-            },
-            "& .MuiInputLabel-root": {
-              color: "#999",
-            },
+        {/* Tabs for Login/Register */}
+        <Tabs
+          value={tab}
+          onChange={(e, newValue) => {
+            setTab(newValue);
+            setError("");
+            setCredentials({ username: "", email: "", password: "" });
           }}
-        />
-
-        <TextField
-          label="Password"
-          type={showPassword ? "text" : "password"}
-          name="password"
-          fullWidth
-          value={credentials.password}
-          onChange={handleChange}
-          sx={{ 
-            mb: 3,
-            "& .MuiOutlinedInput-root": {
-              backgroundColor: "rgba(102, 126, 234, 0.08)",
-              borderRadius: "10px",
-              transition: "all 0.3s",
-              "& fieldset": {
-                borderColor: "rgba(102, 126, 234, 0.3)",
-              },
-              "&:hover fieldset": {
-                borderColor: "rgba(102, 126, 234, 0.6)",
-              },
-              "&.Mui-focused fieldset": {
-                borderColor: "#667eea",
-                boxShadow: "0 0 0 3px rgba(102, 126, 234, 0.1)",
-              },
-            },
-            "& .MuiInputBase-input": {
-              color: "#333",
-              fontSize: "15px",
-            },
-            "& .MuiInputLabel-root": {
-              color: "#999",
-            },
-          }}
-          InputProps={{
-            endAdornment: (
-              <Button
-                onClick={() => setShowPassword(!showPassword)}
-                sx={{
-                  textTransform: "none",
-                  color: "#667eea",
-                  fontSize: "11px",
-                  fontWeight: "600",
-                  p: 0.5,
-                  "&:hover": {
-                    backgroundColor: "rgba(102, 126, 234, 0.1)",
-                  },
-                }}
-              >
-                {showPassword ? "Hide" : "Show"}
-              </Button>
-            ),
-          }}
-        />
-
-        <Button 
-          variant="contained" 
-          fullWidth 
-          onClick={handleLogin}
-          sx={{
-            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-            color: "white",
-            fontWeight: "700",
-            py: 1.5,
-            borderRadius: "10px",
-            fontSize: "16px",
-            textTransform: "none",
-            transition: "all 0.3s",
-            boxShadow: "0 8px 20px rgba(102, 126, 234, 0.4)",
-            "&:hover": {
-              boxShadow: "0 12px 30px rgba(102, 126, 234, 0.6)",
-              transform: "translateY(-2px)",
-            },
-            "&:active": {
-              transform: "translateY(0)",
-            },
-          }}
+          sx={{ mb: 3 }}
+          centered
         >
-          Sign In
-        </Button>
+          <Tab label="Login" />
+          <Tab label="Register" />
+        </Tabs>
+
+        {/* Error Alert */}
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
+
+        <Box component="form" onSubmit={handleSubmit}>
+          {/* Username field (only for registration) */}
+          {tab === 1 && (
+            <TextField
+              label="Username"
+              name="username"
+              fullWidth
+              value={credentials.username}
+              onChange={handleChange}
+              sx={{
+                mb: 2.5,
+                "& .MuiOutlinedInput-root": {
+                  backgroundColor: "rgba(102, 126, 234, 0.08)",
+                  borderRadius: "10px",
+                },
+              }}
+              disabled={loading}
+            />
+          )}
+
+          {/* Email field */}
+          <TextField
+            label="Email"
+            name="email"
+            type="email"
+            fullWidth
+            value={credentials.email}
+            onChange={handleChange}
+            sx={{
+              mb: 2.5,
+              "& .MuiOutlinedInput-root": {
+                backgroundColor: "rgba(102, 126, 234, 0.08)",
+                borderRadius: "10px",
+              },
+            }}
+            disabled={loading}
+          />
+
+          {/* Password field */}
+          <TextField
+            label="Password"
+            type={showPassword ? "text" : "password"}
+            name="password"
+            fullWidth
+            value={credentials.password}
+            onChange={handleChange}
+            sx={{
+              mb: 3,
+              "& .MuiOutlinedInput-root": {
+                backgroundColor: "rgba(102, 126, 234, 0.08)",
+                borderRadius: "10px",
+              },
+            }}
+            InputProps={{
+              endAdornment: (
+                <Button
+                  onClick={() => setShowPassword(!showPassword)}
+                  sx={{
+                    textTransform: "none",
+                    color: "#667eea",
+                    fontSize: "11px",
+                    fontWeight: "600",
+                    p: 0.5,
+                  }}
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </Button>
+              ),
+            }}
+            disabled={loading}
+          />
+
+          {/* Submit Button */}
+          <Button
+            type="submit"
+            variant="contained"
+            fullWidth
+            disabled={loading}
+            sx={{
+              background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+              color: "white",
+              fontWeight: "700",
+              py: 1.5,
+              borderRadius: "10px",
+              fontSize: "16px",
+              textTransform: "none",
+              boxShadow: "0 8px 20px rgba(102, 126, 234, 0.4)",
+              "&:hover": {
+                boxShadow: "0 12px 30px rgba(102, 126, 234, 0.6)",
+                transform: "translateY(-2px)",
+              },
+            }}
+          >
+            {loading ? "Please wait..." : tab === 0 ? "Sign In" : "Create Account"}
+          </Button>
+        </Box>
 
         <Typography
           sx={{
@@ -229,44 +297,29 @@ const Login = ({ onLogin }) => {
             fontSize: "12px",
           }}
         >
+          {tab === 0 ? "Don't have an account? " : "Already have an account? "}
           <Button
+            onClick={() => {
+              setTab(tab === 0 ? 1 : 0);
+              setError("");
+              setCredentials({ username: "", email: "", password: "" });
+            }}
             sx={{
               color: "#667eea",
               textTransform: "none",
               p: 0,
-              mr: 2,
-              fontWeight: "500",
-              "&:hover": {
-                backgroundColor: "rgba(102, 126, 234, 0.1)",
-              },
+              fontWeight: "600",
             }}
           >
-            Forgot password?
-          </Button>
-          <Button
-            sx={{
-              color: "#667eea",
-              textTransform: "none",
-              p: 0,
-              fontWeight: "500",
-              "&:hover": {
-                backgroundColor: "rgba(102, 126, 234, 0.1)",
-              },
-            }}
-          >
-            Sign up
+            {tab === 0 ? "Register" : "Login"}
           </Button>
         </Typography>
       </Paper>
 
       <style>{`
         @keyframes float {
-          0%, 100% {
-            transform: translateY(0px);
-          }
-          50% {
-            transform: translateY(20px);
-          }
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(30px); }
         }
       `}</style>
     </div>
